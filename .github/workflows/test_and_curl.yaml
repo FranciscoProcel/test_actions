@@ -1,0 +1,52 @@
+# This workflow will install Python dependencies, run tests and lint with a single version of Python
+# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-python
+
+name: Deploy Info
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [master]
+
+permissions:
+  pull-requests: read
+  contents: read
+
+jobs:
+  notify_api:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Build JSON payload
+        run: |
+          cat > payload.json <<'JSON'
+          {
+            "repository": "${{ github.repository }}",
+            "repo_owner": "${{ github.repository_owner }}",
+            "pr_number": ${{ github.event.pull_request.number }},
+            "title": ${{ toJson(github.event.pull_request.title) }},
+            "body": ${{ toJson(github.event.pull_request.body) }},
+            "html_url": "${{ github.event.pull_request.html_url }}",
+            "state": "${{ github.event.pull_request.state }}",
+            "merged": ${{ github.event.pull_request.merged }},
+            "merged_at": "${{ github.event.pull_request.merged_at }}",
+            "merged_by": "${{ github.event.pull_request.merged_by.login }}",
+            "base_branch": "${{ github.event.pull_request.base.ref }}",
+            "head_branch": "${{ github.event.pull_request.head.ref }}",
+            "merge_commit_sha": "${{ github.event.pull_request.merge_commit_sha }}",
+            "labels": ${{ toJson(github.event.pull_request.labels.*.name) }},
+            "assignees": ${{ toJson(github.event.pull_request.assignees.*.login) }},
+            "requested_reviewers": ${{ toJson(github.event.pull_request.requested_reviewers.*.login) }}
+          }
+          JSON
+          echo "Payload built:"
+          cat payload.json
+
+      - name: POST payload to your API
+        run: |
+          curl -sS -X POST 'https://tu-api.example.com/hooks/github-release' \
+            -H 'Content-Type: application/json' \
+            -H 'Authorization: Bearer token_de_prueba_123' \
+            --data-binary @payload.json \
+            --max-time 20 \
+            --retry 3 --retry-all-errors
