@@ -6,7 +6,7 @@ name: Deploy Info
 on:
   pull_request:
     types: [closed]
-    branches: [main]
+    branches: [16]
 
 permissions:
   pull-requests: read
