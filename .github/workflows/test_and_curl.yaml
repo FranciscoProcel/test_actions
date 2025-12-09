@@ -44,7 +44,7 @@ jobs:
 
       - name: POST payload to your API
         run: |
-          curl -sS -X POST 'https://cacell16-pruebas-2025-12-08-26348625.dev.odoo.com/github/release-webhook' \
+          curl -sS -X POST 'https://trescloud-test-actionsv16-16-0-26384904.dev.odoo.com/github/release-webhook' \
             -H 'Content-Type: application/json' \
             -H 'Authorization: Bearer token_de_prueba_123' \
             --data-binary @payload.json \
