@@ -36,7 +36,7 @@ jobs:
             "merge_commit_sha": "${{ github.event.pull_request.merge_commit_sha }}",
             "labels": ${{ toJson(github.event.pull_request.labels.*.name) }},
             "assignees": ${{ toJson(github.event.pull_request.assignees.*.login) }},
-            "requested_reviewers": ${{ toJson(github.event.pull_request.requested_reviewers.*.login) }}
+            "requested_reviewers": ${{ toJson(github.event.pull_request.requested_reviewers.*.login) }},
             "total_info": ${{ toJson(github.event) }}
           }
           JSON
