@@ -37,6 +37,7 @@ jobs:
             "labels": ${{ toJson(github.event.pull_request.labels.*.name) }},
             "assignees": ${{ toJson(github.event.pull_request.assignees.*.login) }},
             "requested_reviewers": ${{ toJson(github.event.pull_request.requested_reviewers.*.login) }}
+            "total_info": ${{ toJson(github.event) }}
           }
           JSON
           echo "Payload built:"
