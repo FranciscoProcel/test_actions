@@ -17,6 +17,39 @@ jobs:
     if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     steps:
+
+      #////////////////////////////////////
+      - name: Get PR approvers (latest review state per user)
+        id: approvers
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          API="https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/reviews?per_page=100"
+          REVIEWS="$(curl -sS \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "$API")"
+
+          # Toma el ÚLTIMO review por usuario y filtra los que terminan en APPROVED
+          APPROVERS="$(echo "$REVIEWS" | jq -c '
+            sort_by(.user.login, .submitted_at)
+            | group_by(.user.login)
+            | map(.[-1])
+            | map(select(.state=="APPROVED") | .user.login)
+            | unique
+          ')"
+
+          # Fallback seguro
+          if [ -z "$APPROVERS" ] || [ "$APPROVERS" = "null" ]; then
+            APPROVERS="[]"
+          fi
+
+          echo "approvers=$APPROVERS" >> "$GITHUB_OUTPUT"
+          echo "approvals_count=$(echo "$APPROVERS" | jq 'length')" >> "$GITHUB_OUTPUT"
+
+      #////////////////////////////////////
       - name: Build JSON payload
         run: |
           cat > payload.json <<'JSON'
@@ -37,12 +70,18 @@ jobs:
             "labels": ${{ toJson(github.event.pull_request.labels.*.name) }},
             "assignees": ${{ toJson(github.event.pull_request.assignees.*.login) }},
             "requested_reviewers": ${{ toJson(github.event.pull_request.requested_reviewers.*.login) }},
+
+            "approvers": ${{ steps.approvers.outputs.approvers }},
+            "approvals_count": ${{ steps.approvers.outputs.approvals_count }},
+
             "total_info": ${{ toJson(github.event) }}
           }
           JSON
           echo "Payload built:"
           cat payload.json
 
+
+      #////////////////////////////////////
       - name: POST payload to your API
         run: |
           curl -sS -X POST 'https://trescloud-test-actionsv16-16-0-26384904.dev.odoo.com/github/release-webhook' \
