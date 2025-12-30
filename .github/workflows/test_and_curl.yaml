@@ -83,6 +83,8 @@ jobs:
 
       #////////////////////////////////////
       - name: POST payload to your API
+        env:
+          ODOO_WEBHOOK_TOKEN: ${{ secrets.ODOO_WEBHOOK_TOKEN }}
         run: |
           curl -sS -X POST 'https://trescloud-test-actionsv16-16-0-26384904.dev.odoo.com/github/release-webhook' \
             -H 'Content-Type: application/json' \
