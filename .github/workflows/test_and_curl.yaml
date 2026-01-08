@@ -1,12 +1,14 @@
-# This workflow will install Python dependencies, run tests and lint with a single version of Python
-# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-python
+#Variables necesarias
+# WEBHOOK_ENABLED: 'true'  # Habilita o deshabilita el webhook
+# ODOO_WEBHOOK_URL: URL del endpoint de la API de Odoo
+# ODOO_WEBHOOK_TOKEN: Token de autorización para la API de Odoo (guardarlo en Secrets)
+# MAIN_BRANCH: Nombre de la rama principal (16,18, etc.)
 
-name: Deploy Info
+name: Deploy Info on PR Merge
 
 on:
   pull_request:
     types: [closed]
-    branches: [main]
 
 permissions:
   pull-requests: read
@@ -14,12 +16,25 @@ permissions:
 
 jobs:
   notify_api:
-    if: github.event.pull_request.merged == true
+    # Condiciones: 
+      #1. El PR debe estar mergeado
+      #2. La variable de entorno WEBHOOK_ENABLED debe estar en 'true'
+      #3. La rama base del PR debe ser la rama principal (main o master)
+    if: >
+      github.event.pull_request.merged == true && 
+      vars.WEBHOOK_ENABLED == 'true' &&
+      github.event.pull_request.base.ref == vars.MAIN_BRANCH
+    
     runs-on: ubuntu-latest
-    steps:
 
-      #////////////////////////////////////
-      - name: Get PR approvers (latest review state per user)
+    env:
+      ODOO_WEBHOOK_URL: ${{ vars.ODOO_WEBHOOK_URL }}
+      ODOO_WEBHOOK_TOKEN: ${{ secrets.ODOO_WEBHOOK_TOKEN }}
+    
+    steps:
+      #//////////////////////// Obtiene los aprobadores del PR /////////////////
+      # Usamos la API de GitHub para obtener los reviews del PR y filtrar los aprobadores
+      - name: Get PR approvers
         id: approvers
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -27,21 +42,19 @@ jobs:
           set -euo pipefail
 
           API="https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/reviews?per_page=100"
-          REVIEWS="$(curl -sS \
+          REVIEWS="$(curl -sS --fail-with-body \
             -H "Authorization: Bearer $GH_TOKEN" \
             -H "Accept: application/vnd.github+json" \
             "$API")"
 
-          # Toma el ÚLTIMO review por usuario y filtra los que terminan en APPROVED
           APPROVERS="$(echo "$REVIEWS" | jq -c '
-            sort_by(.user.login, .submitted_at)
+            sort_by([.user.login, .submitted_at])
             | group_by(.user.login)
             | map(.[-1])
             | map(select(.state=="APPROVED") | .user.login)
             | unique
           ')"
 
-          # Fallback seguro
           if [ -z "$APPROVERS" ] || [ "$APPROVERS" = "null" ]; then
             APPROVERS="[]"
           fi
@@ -49,9 +62,10 @@ jobs:
           echo "approvers=$APPROVERS" >> "$GITHUB_OUTPUT"
           echo "approvals_count=$(echo "$APPROVERS" | jq 'length')" >> "$GITHUB_OUTPUT"
 
-      #////////////////////////////////////
+      #/////////////////////// Construye el payload JSON //////////////////////
       - name: Build JSON payload
         run: |
+          set -euo pipefail
           cat > payload.json <<'JSON'
           {
             "repository": "${{ github.repository }}",
@@ -72,23 +86,20 @@ jobs:
             "requested_reviewers": ${{ toJson(github.event.pull_request.requested_reviewers.*.login) }},
 
             "approvers": ${{ steps.approvers.outputs.approvers }},
-            "approvals_count": ${{ steps.approvers.outputs.approvals_count }},
-
-            "total_info": ${{ toJson(github.event) }}
+            "approvals_count": ${{ steps.approvers.outputs.approvals_count }}
           }
           JSON
-          echo "Payload built:"
-          cat payload.json
+          echo "Payload built"
 
 
-      #////////////////////////////////////
-      - name: POST payload to your API
-        env:
-          ODOO_WEBHOOK_TOKEN: ${{ secrets.ODOO_WEBHOOK_TOKEN }}
+      #////////////////////////// Envía el payload a tu API //////////////////////
+      - name: Send data
         run: |
-          curl -sS -X POST 'https://trescloud-test-actionsv16-16-0-26384904.dev.odoo.com/github/webhook' \
+          set -euo pipefail
+
+          curl -sS --fail-with-body -X PUT "$ODOO_WEBHOOK_URL" \
             -H 'Content-Type: application/json' \
-            -H 'Authorization: Bearer token_de_prueba_123' \
+            -H "Authorization: Bearer $ODOO_WEBHOOK_TOKEN" \
             --data-binary @payload.json \
             --max-time 20 \
             --retry 3 --retry-all-errors
