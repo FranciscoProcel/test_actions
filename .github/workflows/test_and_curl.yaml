@@ -23,7 +23,10 @@ jobs:
     if: >
       github.event.pull_request.merged == true && 
       vars.WEBHOOK_ENABLED == 'true' &&
-      github.event.pull_request.base.ref == vars.MAIN_BRANCH
+      contains(
+        format(',{0},', vars.ALLOWED_BASE_BRANCHES), 
+        format(',{0},', github.event.pull_request.base.ref)
+      )
     
     runs-on: ubuntu-latest
 
